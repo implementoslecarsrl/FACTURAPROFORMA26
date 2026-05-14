@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Generador Proformas LECAR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root { --blue: #2a7de1; --gray: #4a4a4a; --light: #f5f7fa; --border: #e0e0e0; }
+  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: var(--light); color: #222; padding: 10px; }
+  
+  /* EDITOR */
+  .app-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  h1 { color: var(--blue); margin: 0 0 12px 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+  h1 img { height: 28px; }
+  .section { margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  .section-title { font-weight: 600; margin-bottom: 8px; color: var(--gray); font-size: 0.95rem; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+  input, select, textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  textarea { resize: vertical; min-height: 60px; font-family: monospace; font-size: 12px; }
+  .product-list { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: #fafafa; }
+  .product-item { padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .product-item:last-child { border-bottom: none; }
+  .add-btn { background: var(--blue); color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+  .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cart-table { width: 100%; border-collapse: collapse; min-width: 600px; font-size: 12px; }
+  .cart-table th, .cart-table td { padding: 6px 8px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  .cart-table th { background: #f0f4ff; font-size: 11px; }
+  .cart-table textarea.desc-input { width: 100%; min-height: 70px; padding: 4px; font-size: 11px; font-family: monospace; resize: vertical; border: 1px solid #ddd; border-radius: 4px; }
+  .cart-table input[type="number"] { width: 100%; min-width: 50px; padding: 4px; text-align: center; }
+  .cart-table input.price-input { text-align: right; }
+  .remove-btn { color: #e53935; cursor: pointer; font-weight: bold; font-size: 16px; padding: 0 4px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .btn { flex: 1; min-width: 120px; padding: 11px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; text-align: center; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-secondary { background: #e0e0e0; color: #333; }
+  .btn-share { background: #25D366; color: #fff; }
+  .btn-print { background: #4a4a4a; color: #fff; }
+
+  /* PROFORMA - RESULTADO FINAL */
+  #proformaView { 
+    display: none; 
+    position: fixed; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%; 
+    background: #e0e0e0; 
+    z-index: 9999; 
+    overflow-y: auto; 
+    padding: 20px 0;
+  }
+  .proforma-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    background: #fff;
+    padding: 14mm 8mm 0 8mm; /* Desplazado hacia abajo como pediste */
+    box-shadow: 0 0 15px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #000;
+  }
+  .p-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-bottom: 8px; }
+  .p-header img { height: 70px; max-width: 100%; object-fit: contain; }
+  .p-header-info { text-align: right; width: 45%; }
+  .p-title { font-size: 18px; font-weight: bold; color: var(--blue); margin: 0 0 3px 0; }
+  .p-company-address { font-size: 10px; color: #555; margin-top: 3px; line-height: 1.25; }
+  
+  /* 1. DATOS CLIENTE: 15px */
+  .p-client { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 5px 12px; 
+    margin-top: 10px; 
+    margin-bottom: 10px; 
+    font-size: 15px; 
+    border-bottom: 1px solid #eee; 
+    padding-bottom: 8px; 
+  }
+  .p-client strong { color: var(--gray); }
+  
+  /* 2. TABLA: Tamaño anterior (11.5px cuerpo, 10.5px header) */
+  .p-table { width: 100%; border-collapse: collapse; margin-top: 4px; margin-bottom: 6px; table-layout: fixed; break-inside: avoid; }
+  .p-table th { background: #f0f4ff; padding: 5px 6px; text-align: left; border-bottom: 2px solid #ccc; font-size: 10.5px; }
+  .p-table td { padding: 5px 6px; border-bottom: 1px solid #eee; vertical-align: top; word-break: break-word; font-size: 11.5px; }
+  .p-desc { white-space: pre-wrap; font-size: 11.5px; line-height: 1.3; }
+  .p-name { font-weight: bold; font-size: 12px; }
+  
+  .p-totals { text-align: right; font-size: 13px; margin-top: 4px; margin-bottom: 6px; }
+  .p-total-final { font-weight: bold; font-size: 16px; border-top: 2px solid #000; padding-top: 3px; }
+  .p-iva-note { font-size: 10px; color: #666; margin-bottom: 1px; }
+  
+  .p-observaciones { 
+    background: #f9f9f9; 
+    padding: 6px 8px; 
+    border-left: 3px solid var(--blue); 
+    font-size: 11px; 
+    margin-bottom: 0; /* Ancla para el margen de 8cm */
+  }
+  
+  /* 3. FIRMA: Separada exactamente 8cm del renglón nacional */
+  .p-signature-box {
+    margin-top: 8cm;
+    width: 100%;
+    text-align: center;
+    page-break-inside: avoid;
+  }
+  .p-signature-line {
+    width: 260px;
+    margin: 0 auto;
+    border-top: 1px solid #000;
+    padding-top: 5px;
+    font-size: 12px;
+  }
+
+  .floating-actions {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; z-index: 10000;
+    background: rgba(255,255,255,0.95); padding: 10px; border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+  .floating-actions .btn { min-width: 100px; padding: 8px 12px; font-size: 12px; }
+
+  @media print {
+    @page { size: A4 portrait; margin: 7mm; }
+    body { background: #fff; padding: 0; margin: 0; }
+    .app-container, .floating-actions { display: none !important; }
+    #proformaView { display: block !important; position: static; background: #fff; padding: 0; }
+    .proforma-sheet { box-shadow: none; width: 100%; min-height: auto; padding: 0; margin: 0; }
+    /* Aplicar exactamente los mismos tamaños en impresión */
+    .p-client { font-size: 15px !important; }
+    .p-table th { font-size: 10.5px !important; }
+    .p-table td, .p-desc, .p-name { font-size: 11.5px !important; }
+    .p-signature-box { margin-top: 8cm !important; }
+  }
+
+  @media (max-width: 600px) {
+    .proforma-sheet { width: 100%; padding: 10mm 5mm 0 5mm; }
+    .p-header { flex-direction: column; gap: 10px; }
+    .p-header img { height: 60px; }
+    .p-header-info { width: 100%; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-container" id="app">
+  <h1><img src="logo.jpg" onerror="this.style.display='none'"> LECAR - Proformas</h1>
+  
+  <div class="section">
+    <div class="section-title">Datos del Cliente</div>
+    <div class="form-grid">
+      <input type="text" id="razonSocial" placeholder="Razón Social">
+      <input type="text" id="cuit" placeholder="CUIT">
+      <input type="text" id="domicilio" placeholder="Domicilio">
+      <input type="text" id="localidad" placeholder="Localidad">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Agregar Productos</div>
+    <input type="text" id="searchProduct" placeholder=" Buscar producto..." style="margin-bottom:8px;">
+    <div class="product-list" id="productList"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Proforma Actual</div>
+    <div class="table-wrapper">
+      <table class="cart-table">
+        <thead>
+          <tr>
+            <th style="width:22%">Producto</th>
+            <th style="width:38%">Características (Editable)</th>
+            <th style="width:10%">Cant.</th>
+            <th style="width:15%">Precio Unit.</th>
+            <th style="width:15%">Subtotal</th>
+            <th style="width:5%"></th>
+          </tr>
+        </thead>
+        <tbody id="cartBody"></tbody>
+      </table>
+    </div>
+    <div style="text-align:right; margin-top:8px; font-weight:bold; font-size: 15px;">
+      Total: <span id="cartTotal">$ 0,00</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="generateProforma()"> ️ Ver Proforma</button>
+    <button class="btn btn-print" onclick="printDirect()"> ️ Imprimir</button>
+    <button class="btn btn-secondary" onclick="clearCart()"> ️ Limpiar</button>
+  </div>
+</div>
+
+<div id="proformaView">
+  <div class="proforma-sheet" id="pdfContent">
+    <div class="p-header">
+      <div style="width: 45%;">
+        <img src="logo.jpg" onerror="this.style.display='none'" alt="Logo LECAR">
+        <div class="p-company-address">
+          AREA INDUSTRIAL ARMSTRONG<br>
+          ARMSTRONG (2508) - SANTA FE<br>
+          Tel: 03471-490341 | agroparteslecar@gmail.com
+        </div>
+      </div>
+      <div class="p-header-info">
+        <p class="p-title">PROFORMA DE VENTA</p>
+        <p id="pNumber" style="margin:0; font-weight:bold;">N°: LE-0001</p>
+        <p id="pDate" style="margin:0; font-size:11px;">Fecha: --/--/----</p>
+      </div>
+    </div>
+
+    <div class="p-client">
+      <div><strong>Razón Social:</strong> <span id="pRazon"></span></div>
+      <div><strong>CUIT:</strong> <span id="pCuit"></span></div>
+      <div><strong>Domicilio:</strong> <span id="pDom"></span></div>
+      <div><strong>Localidad:</strong> <span id="pLoc"></span></div>
+    </div>
+
+    <table class="p-table">
+      <thead>
+        <tr>
+          <th style="width:25%">Producto</th>
+          <th style="width:45%">Características Técnicas</th>
+          <th style="width:10%">Cant.</th>
+          <th style="width:20%">Precio Unit.</th>
+          <th style="width:20%">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody id="pItems"></tbody>
+    </table>
+
+    <div class="p-totals">
+      <div class="p-iva-note">IVA: No incluido (Alícuota 10.5%)</div>
+      <div class="p-total-final">TOTAL: <span id="pTotal"></span></div>
+    </div>
+
+    <div class="p-observaciones">
+      Producto de Fabricacion 100% Industria Nacional.
+    </div>
+
+    <div class="p-signature-box">
+      <div class="p-signature-line">Firma del Socio Gerente</div>
+    </div>
+  </div>
+  
+  <div class="floating-actions no-print">
+    <button class="btn btn-share" onclick="shareAndDownload()"> 📤 Compartir PDF</button>
+    <button class="btn btn-secondary" onclick="backToApp()">⬅️ Volver</button>
+  </div>
+</div>
+
+<script>
+// --- DATOS DE PRODUCTOS (Lista 57) ---
+const PRODUCTS = [
+  { cat: "Tolvas Semillas/Fert.", items: [
+    { n: "Tolva 8 TT", d: "- Sin Fin de 160 diam., 5 mt largo\n- Con Tape Rapido\n- Llantas 825 x 22.5\n- Divisorio en el medio\n- Epoxi en el interior", p: 19811000, opts: [{n:"Desc. Cobertor", v:-903000}, {n:"Duales 825x22.5", v:1483500}] },
+    { n: "Tolva 10 TT (13 M3)", d: "- Sin Fin de 160 diam, 5 mt largo\n- Con Tape rapido\n- Llantas 825 x 22.5\n- Divisorio en el medio\n- Epoxi en el interior", p: 21367000, opts: [{n:"Desc. Cobertor", v:-903000}] },
+    { n: "Tolva 14 TT (18 M3)", d: "- Sin Fin de 160 diam, 5 mt largo\n- Con Tape rapido\n- Llantas 825 x 22,5\n- Divisorio en el medio\n- Epoxi en el interior\n- Palanquilla 3\"", p: 24916000, opts: [{n:"Desc. Cobertor", v:-1023000}, {n:"Duales 825x22.5", v:1483500}] },
+    { n: "Tolva 20 TT (25 M3)", d: "- Sin Fin de 200diam. 6 mt largo\n- Con Tape Rapido\n- Llantas 825 x 22,5 Dual\n- Divisorio en el medio\n- Epoxi en el interior\n- Eje Tubular 5 1/4\"\n- Maza 10 Agujeros", p: 34837000, opts: [{n:"Desc. Cobertor", v:-1234000}] },
+    { n: "Tolva 24 TT (30 M3)", d: "- Sin Fin de 200diam. 6 mt largo\n- Con Tape Rapido\n- Llantas 825 x 22,5 Dual\n- Divisorio en el medio\n- Epoxi en el interior\n- Eje Tubular 5 1/4\"\n- Maza 10 Agujeros", p: 37275000, opts: [{n:"Desc. Cobertor", v:-1297000}] }
+  ]},
+  { cat: "Tolvas Cereales", items: [
+    { n: "Tolva Cerealera 6 TT (8 M3)", d: "- Con Lona para atar\n- Llantas 825 x 22.5", p: 11400500 },
+    { n: "Tolva Cerealera 8 TT (10 M3)", d: "- Con Tape Rapido\n- Llantas 825 x 22.5", p: 13857500, opts: [{n:"Desc. Cobertor", v:-900500}] },
+    { n: "Tolva Cerealera 10 TT", d: "- Con Tape Rapido\n- Llantas 825 x 22.5", p: 16524500, opts: [{n:"Desc. Cobertor", v:-900500}] },
+    { n: "Tolva Cerealera 14 TT (18 M3)", d: "- Tape Rapido\n- Llantas 825 x 22,5", p: 20254000, opts: [{n:"Desc. Cobertor", v:-1023000}] },
+    { n: "Tolva Cerealera 20 TT (25 M3)", d: "- Con Tape Rapido\n- Llantas 825 x 22,5 Dual\n- Eje Tubular 5 1/4\"\n- Maza 10 agujeros", p: 30408000, opts: [{n:"Desc. Cobertor", v:-1234000}] },
+    { n: "Tolva Cerealera 24 TT", d: "- Con Tape Rapido\n- Llantas 825 x 22,5 Dual\n- Eje Tubular 5 1/4\"\n- Maza 10 agujeros", p: 33900500, opts: [{n:"Desc. Cobertor", v:-1297000}] }
+  ]},
+  { cat: "Rollos & Palas", items: [
+    { n: "Elevador Rollos Fijo 3.70m", d: "- Elevador De Rollos Fijo", p: 6198150 },
+    { n: "Elevador Rollos c/ Cilindro", d: "- Elevador De Rollos Con Cilindro de Cabeceo", p: 7000000 },
+    { n: "Pinche para dos rollos", d: "- Pinche para dos rollos", p: 5335500 },
+    { n: "Transportador 6 a 8 Rollos", d: "- Transportador de 6 a 8 Rollos", p: 9175000 },
+    { n: "Transportador 8 a 12 Rollos", d: "- Transportador de 8 a 12 Rollos", p: 11973000 },
+    { n: "Pala Arrastre 1.50m", d: "- Incluye Reja Lateral\n- Eje de 2\"\n- Rodado 650 x 16", p: 5090000, opts: [{n:"Acc. Cilindro c/ Manguera", v:799150}] },
+    { n: "Pala Arrastre 2.00m", d: "- Incluye Reja Lateral\n- Eje de 2\"\n- Rodado 750 x 16\n- Con cilindro 3 x 200", p: 6400000 }
+  ]},
+  { cat: "Tanques Combinados", items: [
+    { n: "Tanque Combinado 6000lts", d: "- Doble Baulera lateral y un baúl trasero\n- Tanque de agua de 750 lts Delantero o Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes 2 ½\" maza Grande", p: 17177500 },
+    { n: "Tanque Combinado 5000lts", d: "- Doble Baulera lateral y un baúl trasero\n- Tanque de agua de 750 lts Delantero o Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes 2 ½\" maza Grande", p: 16044000 },
+    { n: "Tanque Combinado 4000lts", d: "- Doble Baulera lateral y un baúl trasero\n- Tanque de agua de 750 lts Delantero o Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2 ½\"", p: 14935000 },
+    { n: "Tanque Combinado 3000lts", d: "- Doble Baulera lateral y un baúl trasero\n- Tanque de agua de 750 lts Delantero o Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2 ½\"", p: 12962500 },
+    { n: "Tanque Combinado 2000lts", d: "- Doble Baulera lateral y un baúl trasero\n- Tanque de agua de 750 lts Delantero o Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2\" y llantas 650 x 16 Dual", p: 10300000 }
+  ]},
+  { cat: "Tanques Taller", items: [
+    { n: "Tanque Taller 5000lts", d: "- Doble Baulera lateral Y taller trasero 1.50 mts largo x 1.50 mts ancho x 1.30 mts alto\n- Tanque de agua de 700 litros Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes 2 ½\" maza Grande", p: 19920000 },
+    { n: "Tanque Taller 4000lts", d: "- Doble Baulera lateral Y taller trasero 1.50 mts largo x 1.50 mts ancho x 1.30 mts alto\n- Tanque de agua de 700 litros Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2 ½\"", p: 17785000 },
+    { n: "Tanque Taller 3000lts", d: "- Doble Baulera lateral Y taller trasero 1.50 mts largo x 1.50 mts ancho x 1.30 mts alto\n- Tanque de agua de 700 litros Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2 ½\"", p: 15912500 },
+    { n: "Tanque Taller 2000lts", d: "- Doble Baulera lateral Y taller trasero 1.50 mts largo x 1.50 mts ancho x 1.30 mts alto\n- Tanque de agua de 700 litros Arriba\n- Rodado 650 x 16 Duales\n- Tanque construido en chapa plegada de 1/8\n- Chasis construido en chapa de 1/4 y 3/16\n\nESPECIFICACIONES:\n- Ejes de 2\" y llantas 650 x 16 Dual", p: 12400000 }
+  ]},
+  { cat: "Combustible c/ Baulera", items: [
+    { n: "Combustible c/ Baulera 6000lts", d: "- Llantas 650 x 16 Duales\n- Con eje palanquilla 2 ½\"\n- Largo 5mts", p: 14805000 },
+    { n: "Combustible c/ Baulera 5000lts", d: "- Llantas 650 x 16 Duales\n- Con eje palanquilla 2 ½\"\n- Largo 4,85mts", p: 13800000 },
+    { n: "Combustible c/ Baulera 4000lts", d: "- Llantas 650 x 16 Duales\n- Con eje palanquilla 2 ½\"\n- Largo 3,85mts", p: 12820500 },
+    { n: "Combustible c/ Baulera 3000lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"\n- Largo 3,85mts", p: 9860000 },
+    { n: "Combustible c/ Baulera 2000lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"\n- Largo 3,25mts", p: 8040000 }
+  ]},
+  { cat: "Combustible Solo", items: [
+    { n: "Combustible Solo 10000lts", d: "- Llantas 8.25 x 22.5\n- Con eje palanquilla 3\"\n- Largo 5.50mts", p: 17605000 },
+    { n: "Combustible Solo 8000lts", d: "- Llantas 8.25 x 22.5\n- Con eje palanquilla 3\"\n- Largo 5mts", p: 16760000 },
+    { n: "Combustible Solo 6000lts", d: "- Llantas 650 x 16 Duales\n- Con eje palanquilla 2 ½\"\n- Largo 4.20mts", p: 13205000 },
+    { n: "Combustible Solo 5000lts", d: "- Llantas 650 x 16 Duales\n- Con eje palanquilla 2 ½\"\n- Largo 4mts", p: 11720000 },
+    { n: "Combustible Solo 4000lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"\n- Largo 3mts", p: 8900500 },
+    { n: "Combustible Solo 3000lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"\n- Largo 3mts", p: 7200000 },
+    { n: "Combustible Solo 2000lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"\n- Largo 2.50mts", p: 6950000 },
+    { n: "Combustible Solo 1500lts", d: "- Llantas 650 x 16\n- Con eje palanquilla 2\"", p: 3990000 }
+  ]},
+  { cat: "Plástico / Bidoneras", items: [
+    { n: "Combinado 3750lts", d: "- Con llantas duales 750 x 16\n- Baulera trasera\n- 2 cajones laterales\n- 750 lts de agua adelante\n- Largo Total 4.85 mts\n- Color a elección", p: 10820000 },
+    { n: "Tanque 3750lts c/ Bidonera", d: "- Con llantas 750 x 16\n- Aro Giratorio a bolillas\n- Eje palanquilla 2\"\n- Con un rompe ola\n- Bidoneras laterales y Frontales\n- Largo Total 4,0 Mts\n- Medidas: 2,90 largo x 1,49 ancho x 1,21 alto", p: 10451000 },
+    { n: "Tanque 5000lts c/ Bidonera", d: "- Con llantas Duales 750 x 16\n- Masas Con rodillos 9-11 Centro 150 diam.\n- Aro Giratorio a bolillas\n- Eje palanquilla 2 1/2\"\n- Con un rompe ola\n- Bidoneras laterales y Frontales\n- Largo Total 4,2 Mts\n- Medidas: 3,06 largo x 1,55 diametro", p: 13695000 },
+    { n: "Tanque 6000lts c/ Bidonera", d: "- Con llantas Duales 750 x 16\n- Aro Giratorio a bolillas\n- Eje palanquilla 2 1/2\"\n- Con un rompe ola\n- Bidoneras laterales y Frontales\n- Largo Total 4,60 Mts\n- Medidas: 2,90 largo x 1,49 ancho x 2.00 alto", p: 17445000 },
+    { n: "Tanque 8000lts c/ Bidonera", d: "- Con llantas 22.5\n- Masas Con rodillos 9-12 Centro 150 diam.\n- Aro Giratorio a bolillas\n- Eje palanquilla 3\"\n- Con rompe olas\n- Bidoneras laterales y Frontales\n- Largo Total 4,2 Mts\n- Medidas: 5,06 largo x 1,45 alto x 2.10 ancho", p: 20483800 },
+    { n: "Tanque 10500lts SIN Bidonera", d: "- Con llantas 22.5\n- Masas Con rodillos 10-13 Centro 150 diam.\n- Aro Giratorio a bolillas\n- Eje palanquilla 3\"\n- Con rompe olas\n- Largo Total 4,2 Mts\n- Medidas: 5,06 largo x 1,45 alto x 2.10 ancho", p: 24625000 }
+  ]},
+  { cat: "Playos / Volcadores", items: [
+    { n: "Playo c/ Baranda 3 TT", d: "- Con llantas 650 x 16\n- Aro Giratorio a bolillas\n- Con piso de chapa antideslizante\n- Barandas frontales ventiladas\n- Barandas laterales 0.50 cm. de altura\n- Largo 3 Mts x 1.90 Mts ancho", p: 6520000 },
+    { n: "Playo c/ Baranda 4 TT", d: "- Con llantas 650 x 16\n- Aro Giratorio a bolillas\n- Con piso de chapa antideslizante\n- Barandas frontales ventiladas\n- Barandas laterales 0.50 cm. de altura\n- Largo 4 Mts x 1.90 Mts ancho", p: 7655000 },
+    { n: "Playo c/ Baranda 6 TT", d: "- Con llantas 650 x 16 duales 150 centro\n- Ejes 2 ½\", bolilleros 30209/30211\n- Con piso de chapa antideslizante\n- Barandas frontales ventiladas\n- Barandas laterales 0.70 cm. de altura\n- Largo 4,50 Mts x 2.20 Mts ancho", p: 12143000 },
+    { n: "Playo Volcador Hidr. 4 TT", d: "- Aro Giratorio a bolillas\n- Barandas Trasera volcable\n- Barandas laterales 0.50 cm. de altura\n- Largo 4 Mts x 1.90 Mts ancho", p: 14270000, opts: [{n:"Sist. Luces", v:261250}, {n:"Dif. Duales", v:610800}] },
+    { n: "Playo Volcador Hidr. 6 TT", d: "- Con llantas 650 x 16 Duales\n- Aro Giratorio a bolillas\n- Barandas Trasera volcable\n- Barandas laterales 0.60 cm. de altura\n- Largo 4,20 Mts x 2.00 Mts ancho", p: 16464000, opts: [{n:"Sist. Luces", v:261250}, {n:"Dif. Duales", v:610800}] }
+  ]},
+  { cat: "Talleres / Ganado", items: [
+    { n: "Taller CHICO", d: "- Largo 4 mts, ancho 2.00mts, alto 1.90 mts\n- Cuatro puertas laterales y una trasera\n- Llantas 650 x 16", p: 13010000 },
+    { n: "Taller GRANDE", d: "- Largo 5 mts, ancho 2.10mts, alto 1.90 mts\n- Cuatro puertas laterales y una trasera\n- Llantas Duales 650 x 16", p: 15300000 },
+    { n: "Jaula Cerdos 6.00m", d: "- Con aro Giratorio a bolillas\n- 8 llantas 650 x 16 dual\n- Puerta trasera guillotina\n- Largo 6,00, ancho 2.00, alto 1.30 mts", p: 16800000 },
+    { n: "Vaquero 3-4 Animales Cigüeña", d: "- Con Balancin\n- 4 llantas 750 x 16 simple\n- Lanza con registro\n- Largo 3.50, ancho 2.00, alto 2.00 mts\n- Todos los requerimientos para homologar en SENASA", p: 12900000, opts: [{n:"Desc. Rampa/Cargador", v:-1040600}, {n:"Desc. Registro Lanza", v:-441500}] },
+    { n: "Vaquero 5-6 Animales Cigüeña", d: "- Con Balancin\n- 4 llantas 750 x 16 simple\n- Lanza con registro\n- Largo 4.50, ancho 2.00, alto 2.00 mts\n- Con divisorio\n- Todos los requerimientos para homologar en SENASA", p: 14290000, opts: [{n:"Desc. Rampa/Cargador", v:-1040600}, {n:"Desc. Registro Lanza", v:-441500}] },
+    { n: "Vaquero 3-4 Animales Conv.", d: "- Con Balancin\n- 4 llantas 750 x 16 simple\n- Lanza con registro\n- Largo 3.50, ancho 2.00, alto 2.00 mts\n- Todos los requerimientos para homologar en SENASA", p: 11024000, opts: [{n:"Desc. Rampa/Cargador", v:-1040600}, {n:"Desc. Registro Lanza", v:-441500}] },
+    { n: "Vaquero 5-6 Animales Conv.", d: "- Con Balancin\n- 4 llantas 750 x 16 simple\n- Lanza con registro\n- Largo 4.50, ancho 2.00, alto 2.00 mts\n- Con divisorio\n- Todos los requerimientos para homologar en SENASA", p: 11930000, opts: [{n:"Desc. Rampa/Cargador", v:-1040600}, {n:"Desc. Registro Lanza", v:-441500}] }
+  ]},
+  { cat: "Accesorios", items: [
+    { n: "Guardabarros Tolvas", d: "- Accesorio para tolvas", p: 500000 },
+    { n: "Noria 5.00m", d: "- Ya incluye desc. de chimango", p: 5309000 },
+    { n: "Chimango 200 (Tolva 14)", d: "- Repuesto chimango", p: 1266000 },
+    { n: "Dif. Llantas 17 (c/u)", d: "- Por cada llanta, dual o simple", p: 55000 },
+    { n: "Puerta lateral baúl trasero", d: "- Por puerta", p: 65000 },
+    { n: "Dif. Baúl Lateral (Toda línea)", d: "- Aplica a tanques", p: 433500 },
+    { n: "Dif. Baúl Lateral 1.55m", d: "- Por unidad", p: 251050 }
+  ]}
+];
+
+// --- ESTADO ---
+let cart = [];
+let counter = parseInt(localStorage.getItem('lecar_counter') || '1');
+
+// --- FUNCIONES UI ---
+function formatMoney(n) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n); }
+
+function renderProducts(filter = '') {
+  const list = document.getElementById('productList');
+  list.innerHTML = '';
+  PRODUCTS.forEach(cat => {
+    cat.items.forEach((item, idx) => {
+      if(filter && !item.n.toLowerCase().includes(filter.toLowerCase())) return;
+      const div = document.createElement('div');
+      div.className = 'product-item';
+      div.innerHTML = `<div><strong>${item.n}</strong><br><small style="color:#666">${formatMoney(item.p)}</small></div><button class="add-btn" onclick="addToCart(${PRODUCTS.indexOf(cat)}, ${idx})">+</button>`;
+      list.appendChild(div);
+    });
+  });
+}
+
+function addToCart(catIdx, itemIdx) {
+  const item = PRODUCTS[catIdx].items[itemIdx];
+  let finalPrice = item.p;
+  let desc = item.d;
+  if(item.opts && item.opts.length > 0) {
+    let choice = prompt(`Opcionales para ${item.n}:\n${item.opts.map((o,i)=>`${i+1}. ${o.n} (${o.v>0?'+':'-'}$${Math.abs(o.v).toLocaleString()})`).join('\n')}\n\nIngrese número (0 para ninguno):`);
+    if(choice && choice !== '0') {
+      const opt = item.opts[parseInt(choice)-1];
+      if(opt) { finalPrice += opt.v; desc += `\n+ ${opt.n}`; }
+    }
+  }
+  cart.push({ name: item.n, desc: desc, price: finalPrice, qty: 1 });
+  renderCart();
+}
+
+function renderCart() {
+  const tbody = document.getElementById('cartBody');
+  tbody.innerHTML = '';
+  let total = 0;
+  cart.forEach((item, i) => {
+    const sub = item.price * item.qty;
+    total += sub;
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${item.name}</strong></td>
+        <td><textarea class="desc-input" onchange="updateDesc(${i}, this.value)">${item.desc}</textarea></td>
+        <td><input type="number" value="${item.qty}" min="1" onchange="updateQty(${i}, this.value)"></td>
+        <td><input type="number" class="price-input" value="${item.price}" onchange="updatePrice(${i}, this.value)"></td>
+        <td>${formatMoney(sub)}</td>
+        <td class="remove-btn" onclick="removeItem(${i})">×</td>
+      </tr>`;
+  });
+  document.getElementById('cartTotal').textContent = formatMoney(total);
+}
+
+function updateQty(i, v) { cart[i].qty = parseInt(v) || 1; renderCart(); }
+function updatePrice(i, v) { cart[i].price = parseFloat(v) || 0; renderCart(); }
+function updateDesc(i, v) { cart[i].desc = v; }
+function removeItem(i) { cart.splice(i, 1); renderCart(); }
+function clearCart() { if(confirm('¿Limpiar proforma?')) { cart=[]; renderCart(); } }
+
+document.getElementById('searchProduct').addEventListener('input', e => renderProducts(e.target.value));
+
+function generateProforma() {
+  if(cart.length === 0) return alert('Agrega al menos un producto.');
+  document.getElementById('pNumber').textContent = `N°: LE-${String(counter).padStart(4, '0')}`;
+  document.getElementById('pDate').textContent = `Fecha: ${new Date().toLocaleDateString('es-AR')}`;
+  document.getElementById('pRazon').textContent = document.getElementById('razonSocial').value || '-';
+  document.getElementById('pCuit').textContent = document.getElementById('cuit').value || '-';
+  document.getElementById('pDom').textContent = document.getElementById('domicilio').value || '-';
+  document.getElementById('pLoc').textContent = document.getElementById('localidad').value || '-';
+  
+  const pItems = document.getElementById('pItems');
+  pItems.innerHTML = '';
+  let total = 0;
+  cart.forEach(item => {
+    const sub = item.price * item.qty;
+    total += sub;
+    pItems.innerHTML += `
+      <tr>
+        <td class="p-name">${item.name}</td>
+        <td class="p-desc">${item.desc}</td>
+        <td style="text-align:center">${item.qty}</td>
+        <td style="text-align:right">${formatMoney(item.price)}</td>
+        <td style="text-align:right">${formatMoney(sub)}</td>
+      </tr>`;
+  });
+  document.getElementById('pTotal').textContent = formatMoney(total);
+  counter++;
+  localStorage.setItem('lecar_counter', counter);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('proformaView').style.display = 'block';
+  window.scrollTo(0,0);
+}
+
+function backToApp() {
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('proformaView').style.display = 'none';
+}
+
+// 4. BOTÓN IMPRIMIR DIRECTO
+function printDirect() {
+  if(cart.length === 0) return alert('Agrega productos.');
+  generateProforma();
+  setTimeout(() => window.print(), 400);
+}
+
+async function shareAndDownload() {
+    const btn = document.querySelector('.btn-share');
+    const originalText = btn.textContent;
+    btn.textContent = ' Generando...';
+    btn.disabled = true;
+    try {
+        const element = document.getElementById('pdfContent');
+        const opt = { margin: 0, filename: `Proforma_LECAR_${document.getElementById('pNumber').textContent}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+        const blob = await html2pdf().set(opt).from(element).outputPdf('blob');
+        const file = new File([blob], opt.filename, { type: "application/pdf" });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            await navigator.share({ title: 'Proforma LECAR', text: 'Adjunto proforma solicitada.', files: [file] });
+        } else {
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = opt.filename; link.click();
+            alert("PDF descargado. Envíalo manualmente.");
+        }
+    } catch (error) { alert("Error al generar PDF."); }
+    finally { btn.textContent = originalText; btn.disabled = false; }
+}
+
+renderProducts();
+</script>
+</body>
+</html>
